@@ -1,0 +1,209 @@
+---
+title: "Project for Decision Trees"
+author: "Deshon Langdon"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    toc: yes
+---
+### 2.1
+
+
+
+```{r}
+
+adult_test <- read.csv("adult-test.csv", sep=",", comment.char = "#")
+adult_train <- read.csv("adult-train.csv", sep=",", comment.char = "#")
+```
+
+
+
+```{r}
+
+cols_qmark_test <- which(sapply(adult_test, function(x) sum(x == "?")) > 0)
+
+
+rows_qmark_test <- which(rowSums(adult_test[, cols_qmark_test] == "?") > 0)
+
+
+adult_test_clean <- adult_test[-rows_qmark_test, ]
+
+adult_test_clean
+
+
+cols_qmark_train <- which(sapply(adult_train, function(x) sum(x == "?")) > 0)
+
+
+rows_qmark_train <- which(rowSums(adult_train[, cols_qmark_train] == "?") > 0)
+
+
+adult_train_clean <- adult_train[-rows_qmark_train, ]
+
+adult_train_clean
+
+```
+
+```{r}
+
+library(rpart)
+library(rpart.plot)
+library(caret)
+# Build the decision tree model
+
+adult_train_clean_model <- rpart(income ~ ., data = adult_train_clean, method = "class")
+
+rpart.plot(adult_train_clean_model,extra=104,fallen.leaves = T, type=1)
+
+print(adult_train_clean_model)
+
+summary(adult_train_clean_model)
+```
+
+```{r}
+cat(" The top three important predictors in the model are:  relationship, marital_status,  capital_gain ")
+```
+
+```{r}
+
+cat (" The first split is done on Relationship predictor where the predicted class was where income is <=50K. \n ")
+cat(" \n The distribution of observations between the <=50K is 22653 and >50 is 7508.")
+```
+
+```{r}
+predict<- predict(adult_train_clean_model, newdata = adult_test_clean, type = "class")
+
+confusion_matrix <- confusionMatrix(predict, as.factor(adult_test_clean$income))
+
+print(confusion_matrix)
+```
+
+```{r}
+bal_accuracy <- confusion_matrix$byClass["Balanced Accuracy"]
+cat(paste("Balanced Accuracy:", round(bal_accuracy,3), "\n"))
+```
+
+```{r}
+balanced_error_rate <- 1 - bal_accuracy
+cat(paste("Balanced Error Rate:", round(balanced_error_rate,3), "\n"))
+
+```
+
+
+
+```{r}
+specificity <- confusion_matrix$byClass["Specificity"]
+sensitivity <- confusion_matrix$byClass["Sensitivity"]
+
+cat(paste("Specificity:", round(specificity,3), "\n"))
+cat(paste("Sensitivity:", round(sensitivity,3), "\n"))
+
+```
+
+```{r}
+
+library(ROCR)
+
+pred.rocr <- predict(adult_train_clean_model, newdata=adult_test_clean,type= "prob") [,2]
+f.pred <- prediction(pred.rocr,adult_test_clean$income )
+f.perf <- performance(f.pred, "tpr", "fpr")
+plot(f.perf,colorize=T,lwd=3)
+abline(0,1)
+auc_clean <- performance(f.pred,measure = "auc")
+auc_clean@y.values[[1]]
+auc_clean
+```
+
+
+```{r}
+printcp(adult_train_clean_model)
+
+cat(" The tree would not benefit from a pruning because by looking that table you can see that the cross-validated misclassification error rates  decreases as the tree get more complex where number of times predictors variables used in each of the splits and resulting terminal nodes of each spilt increases .Moreover, since we want the CP value that minimizes the cross-validated misclassification error rate, therefore in this case  optimal CP value of 0.010000 is equal  to the maximum CP value in the table, therefore the tree is not overfitting and does not need to be pruned")
+```
+
+```{r}
+ set.seed(1122)
+table(adult_train_clean$income)
+
+cat(" \n The number of  observations for <=50K is 22653 and >50 is 7508.")
+```
+
+
+```{r}
+n_minority_adult_train_clean <- sum(adult_train_clean$income == ">50K")
+
+adult_train_clean_majority <- adult_train_clean[adult_train_clean$income == "<=50K",]
+adult_train_clean_minority <- adult_train_clean[adult_train_clean$income == ">50K",]
+adult_train_clean_majority_sample <- adult_train_clean_majority[sample(nrow(adult_train_clean_majority), n_minority_adult_train_clean),]
+train_balanced <- rbind(adult_train_clean_majority_sample, adult_train_clean_minority)
+
+table(train_balanced$income)
+```
+
+```{r}
+train_balanced_model <- rpart(income ~ ., data = train_balanced, method = "class")
+
+rpart.plot(train_balanced_model,extra=104,fallen.leaves = T, type=1,)
+
+predict_balanced<- predict(train_balanced_model, newdata = adult_test_clean, type = "class")
+
+confusion_matrix_balanced <- confusionMatrix(predict_balanced, as.factor(adult_test_clean$income))
+
+print(confusion_matrix_balanced)
+```
+
+
+```{r}
+bal_accuracy_balanced <- confusion_matrix_balanced$byClass["Balanced Accuracy"]
+cat(paste("Balanced Accuracy:", round(bal_accuracy_balanced,3), "\n"))
+```
+
+
+```{r}
+balanced_error_rate_bal <- 1 - bal_accuracy_balanced
+cat(paste("Balanced Error Rate:", round(balanced_error_rate_bal,3), "\n"))
+```
+
+
+```{r}
+specificity_balanced <- confusion_matrix_balanced$byClass["Specificity"]
+sensitivity_balanced <- confusion_matrix_balanced$byClass["Sensitivity"]
+
+cat(paste("Specificity:", round(specificity_balanced,3), "\n"))
+cat(paste("Sensitivity:", round(sensitivity_balanced,3), "\n"))
+
+
+```
+
+
+```{r}
+
+pred.rocr.balanced <- predict(train_balanced_model, newdata=adult_test_clean,type= "prob") [,2]
+f.pred.balanced <- prediction(pred.rocr.balanced,adult_test_clean$income )
+f.perf.balanced <- performance(f.pred.balanced, "tpr", "fpr")
+plot(f.perf.balanced,colorize=T,lwd=3)
+abline(0,1)
+auc.balanced <- performance(f.pred.balanced,measure = "auc")
+auc.balanced@y.values[[1]]
+
+
+
+```
+
+```{r}
+cat("The two models  have different performance measures. In terms of balanced accuracy, model 1 has a higher balanced accuracy of 0.7259 compared to model 2 which has a balanced accuracy of 0.8048. This means that model 2 performs better at predicting the positive class (<=50K), while model 1 is more balanced in predicting both classes\n")
+
+cat(" \n In terms of sensitivity, model 1 has a higher sensitivity of 0.9482 for the positive class (<=50K) compared to model 2 which has a sensitivity of 0.7423. This means that model 1 is better at correctly identifying individuals who earn less than or equal to 50K per year.\n")
+
+cat("\n For specificity, model 2 has a higher specificity of 0.8673 compared to model 1 which has a specificity of 0.5035. This means that model 2 is better at correctly identifying individuals who earn more than 50K per year.\n")
+
+cat("\n In terms of positive predictive value (PPV), model 2 has a higher positive predictive value of 0.9450 compared to model 1 which has a positive predictive (PPV) value of 0.8543. This means that model 2 is better at correctly identifying individuals who earn less than or equal to 50K per year.\n")
+
+cat(" \n Finally, the AUC of the ROC curve for model 1 is,0.843 while the AUC for model (e) is 0.844. This indicates that both models have similar performance in distinguishing between positive and negative classes. However, model 2 has a slightly higher AUC value, which suggests that it has a slightly better ability to correctly classify the positive and negative classes compared to model 2")
+
+
+
+
+```
+
